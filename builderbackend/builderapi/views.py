@@ -600,13 +600,28 @@ def customer_signup(request):
     try:
         email = request.data.get('email')
         password = request.data.get('password')
-        name = request.data.get('name')
+        confirm_password = request.data.get('confirmPassword')
+        first_name = request.data.get('firstName', '')
+        last_name = request.data.get('lastName', '')
+        phone = request.data.get('phone', '')
         website_slug = request.data.get('website_slug')
         
-        if not all([email, password, name, website_slug]):
+        # Handle both name formats (legacy and new)
+        name = request.data.get('name')
+        if not name and (first_name or last_name):
+            name = f"{first_name} {last_name}".strip()
+        
+        if not all([email, password, website_slug]):
             return Response({
                 'success': False,
-                'error': 'All fields are required'
+                'error': 'Email, password, and website are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate password confirmation if provided
+        if confirm_password and password != confirm_password:
+            return Response({
+                'success': False,
+                'error': 'Passwords do not match'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Check if website exists
@@ -625,10 +640,11 @@ def customer_signup(request):
                 'error': 'User with this email already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Split name into first and last name
-        name_parts = name.strip().split(' ', 1)
-        first_name = name_parts[0]
-        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        # Use provided first/last names or split from name field
+        if not first_name and not last_name and name:
+            name_parts = name.strip().split(' ', 1)
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ''
         
         # Create user
         user = User.objects.create_user(
@@ -637,6 +653,7 @@ def customer_signup(request):
             password=password,
             firstName=first_name,
             lastName=last_name,
+            phone=phone,
             isVerified=False  # Will be verified via OTP
         )
         
