@@ -59,7 +59,7 @@ ROOT_URLCONF = 'builderbackend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -186,9 +186,10 @@ CORS_ALLOW_ALL_ORIGINS = True  # Only for development
 AUTH_USER_MODEL = 'builderapi.User'
 
 # Email Configuration (for OTP)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = ''  # Add your email
-EMAIL_HOST_PASSWORD = ''  # Add your email password
+EMAIL_HOST_USER = 'fleetyofficial@gmail.com'
+EMAIL_HOST_PASSWORD = 'cvvhhefqppsheeiv'
+DEFAULT_FROM_EMAIL = 'Corporate Portal <fleetyofficial@gmail.com>'

@@ -8,6 +8,8 @@ class User(AbstractUser):
     lastName = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True)
+    company = models.CharField(max_length=200, blank=True)
+    addresses = models.JSONField(default=list)
     isVerified = models.BooleanField(default=False)
     createdAt = models.DateTimeField(auto_now_add=True)
     updatedAt = models.DateTimeField(auto_now=True)
