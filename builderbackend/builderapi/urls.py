@@ -4,6 +4,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     register, verify_otp, resend_otp, login, logout, profile, dashboard_analytics,
     search_content, search_suggestions, popular_searches,
+    customer_signup, customer_login, customer_verify_otp, customer_profile, customer_logout,
     WebsiteViewSet, BlogPostViewSet, ProductViewSet, OrderViewSet, CartViewSet
 )
 
@@ -31,6 +32,13 @@ urlpatterns = [
     path('search/', search_content, name='search_content'),
     path('search/suggestions/', search_suggestions, name='search_suggestions'),
     path('search/popular/', popular_searches, name='popular_searches'),
+    
+    # Customer Authentication endpoints (for subsite users)
+    path('customer-auth/signup/', customer_signup, name='customer_signup'),
+    path('customer-auth/login/', customer_login, name='customer_login'),
+    path('customer-auth/verify-otp/', customer_verify_otp, name='customer_verify_otp'),
+    path('customer-auth/profile/', customer_profile, name='customer_profile'),
+    path('customer-auth/logout/', customer_logout, name='customer_logout'),
     
     # Include router URLs
     path('', include(router.urls)),

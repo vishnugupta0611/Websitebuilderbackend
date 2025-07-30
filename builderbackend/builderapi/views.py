@@ -266,6 +266,24 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Website.DoesNotExist:
             return Response({'error': 'Website not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
+    def public_detail(self, request, pk=None):
+        """Get product details for public access (subsite)"""
+        try:
+            # Validate that pk is a valid integer
+            try:
+                product_id = int(pk)
+            except (ValueError, TypeError):
+                return Response({'error': 'Invalid product ID'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            product = Product.objects.get(pk=product_id, status='active')
+            serializer = self.get_serializer(product)
+            return Response(serializer.data)
+        except Product.DoesNotExist:
+            return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Order Management Views
 class OrderViewSet(viewsets.ModelViewSet):
@@ -547,3 +565,324 @@ def generate_search_suggestions(query, user):
     
     # Limit to 5 suggestions
     return suggestions[:5]
+
+# Customer Authentication Views (for subsite users)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def customer_signup(request):
+    """Customer signup for specific website"""
+    try:
+        email = request.data.get('email')
+        password = request.data.get('password')
+        name = request.data.get('name')
+        website_slug = request.data.get('website_slug')
+        
+        if not all([email, password, name, website_slug]):
+            return Response({
+                'success': False,
+                'error': 'All fields are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if website exists
+        try:
+            website = Website.objects.get(slug=website_slug)
+        except Website.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Website not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user already exists
+        if User.objects.filter(email=email).exists():
+            return Response({
+                'success': False,
+                'error': 'User with this email already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Split name into first and last name
+        name_parts = name.strip().split(' ', 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+        
+        # Create user
+        user = User.objects.create_user(
+            username=email,  # Use email as username
+            email=email,
+            password=password,
+            firstName=first_name,
+            lastName=last_name,
+            isVerified=False  # Will be verified via OTP
+        )
+        
+        # Generate OTP
+        otp = ''.join(random.choices(string.digits, k=6))
+        OTPVerification.objects.create(user=user, otp=otp)
+        
+        # Send OTP email
+        email_sent = send_otp_email(user, otp)
+        
+        if not email_sent:
+            return Response({
+                'success': False,
+                'error': 'Failed to send verification email. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'success': True,
+            'data': {
+                'message': 'Account created successfully. Please check your email for verification code.',
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'name': f"{user.firstName} {user.lastName}".strip(),
+                    'isVerified': user.isVerified
+                },
+                'requires_verification': True
+            }
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def customer_login(request):
+    """Customer login for specific website"""
+    try:
+        email = request.data.get('email')
+        password = request.data.get('password')
+        website_slug = request.data.get('website_slug')
+        
+        if not all([email, password, website_slug]):
+            return Response({
+                'success': False,
+                'error': 'Email, password, and website are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if website exists
+        try:
+            website = Website.objects.get(slug=website_slug)
+        except Website.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Website not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Authenticate user
+        user = authenticate(email=email, password=password)
+        
+        if not user:
+            return Response({
+                'success': False,
+                'error': 'Invalid email or password'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if not user.isVerified:
+            return Response({
+                'success': False,
+                'error': 'Please verify your email before logging in',
+                'requires_verification': True
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'success': True,
+            'data': {
+                'message': 'Login successful',
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'name': f"{user.firstName} {user.lastName}".strip(),
+                    'isVerified': user.isVerified
+                },
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'website_slug': website_slug
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def customer_verify_otp(request):
+    """Verify customer OTP for specific website"""
+    try:
+        email = request.data.get('email')
+        otp = request.data.get('otp')
+        website_slug = request.data.get('website_slug')
+        
+        if not all([email, otp, website_slug]):
+            return Response({
+                'success': False,
+                'error': 'Email, OTP, and website are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if website exists
+        try:
+            website = Website.objects.get(slug=website_slug)
+        except Website.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Website not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            user = User.objects.get(email=email)
+            
+            # Get the latest unused OTP for this user
+            otp_verification = OTPVerification.objects.filter(
+                user=user, 
+                otp=otp, 
+                is_used=False
+            ).first()
+            
+            if not otp_verification:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid or expired OTP. Please request a new one.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if OTP is expired (10 minutes)
+            if otp_verification.is_expired():
+                return Response({
+                    'success': False,
+                    'error': 'OTP has expired. Please request a new one.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Mark OTP as used
+            otp_verification.is_used = True
+            otp_verification.save()
+            
+            # Mark user as verified
+            user.isVerified = True
+            user.save()
+            
+            # Send welcome email
+            send_welcome_email(user)
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'message': 'Email verified successfully! Welcome!',
+                    'user': {
+                        'id': user.id,
+                        'email': user.email,
+                        'name': f"{user.firstName} {user.lastName}".strip(),
+                        'isVerified': user.isVerified
+                    },
+                    'access_token': str(refresh.access_token),
+                    'refresh_token': str(refresh),
+                    'website_slug': website_slug
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except User.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def customer_profile(request):
+    """Get or update customer profile"""
+    try:
+        website_slug = request.headers.get('X-Website-Slug')
+        
+        if not website_slug:
+            return Response({
+                'success': False,
+                'error': 'Website context required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if website exists
+        try:
+            website = Website.objects.get(slug=website_slug)
+        except Website.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Website not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        if request.method == 'GET':
+            return Response({
+                'success': True,
+                'data': {
+                    'id': request.user.id,
+                    'email': request.user.email,
+                    'name': f"{request.user.firstName} {request.user.lastName}".strip(),
+                    'isVerified': request.user.isVerified,
+                    'website_slug': website_slug
+                }
+            })
+        
+        elif request.method == 'PUT':
+            name = request.data.get('name')
+            
+            if name:
+                # Split name into first and last name
+                name_parts = name.strip().split(' ', 1)
+                request.user.firstName = name_parts[0]
+                request.user.lastName = name_parts[1] if len(name_parts) > 1 else ''
+                request.user.save()
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'id': request.user.id,
+                    'email': request.user.email,
+                    'name': f"{request.user.firstName} {request.user.lastName}".strip(),
+                    'isVerified': request.user.isVerified,
+                    'website_slug': website_slug
+                }
+            })
+            
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def customer_logout(request):
+    """Customer logout"""
+    try:
+        refresh_token = request.data.get("refresh_token")
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        
+        return Response({
+            'success': True,
+            'data': {
+                'message': 'Logout successful'
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': True,
+            'data': {
+                'message': 'Logout successful'
+            }
+        }, status=status.HTTP_200_OK)
