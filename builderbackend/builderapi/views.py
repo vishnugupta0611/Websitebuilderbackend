@@ -332,6 +332,32 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def customer_orders(self, request):
+        """Get orders for a specific customer by email and website slug"""
+        email = request.query_params.get('email')
+        website_slug = request.query_params.get('website_slug')
+        
+        if not email or not website_slug:
+            return Response({
+                'error': 'Both email and website_slug parameters are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get orders for this customer and website
+            orders = Order.objects.filter(
+                customerEmail=email,
+                websiteSlug=website_slug
+            ).order_by('-createdAt')
+            
+            serializer = OrderSerializer(orders, many=True)
+            return Response(serializer.data)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to fetch customer orders: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Cart Management Views
 class CartViewSet(viewsets.ModelViewSet):
