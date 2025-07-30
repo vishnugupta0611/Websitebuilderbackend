@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     register, verify_otp, resend_otp, login, logout, profile, dashboard_analytics,
+    search_content, search_suggestions, popular_searches,
     WebsiteViewSet, BlogPostViewSet, ProductViewSet, OrderViewSet, CartViewSet
 )
 
@@ -25,6 +26,11 @@ urlpatterns = [
     
     # Analytics
     path('analytics/dashboard/', dashboard_analytics, name='dashboard_analytics'),
+    
+    # Search endpoints
+    path('search/', search_content, name='search_content'),
+    path('search/suggestions/', search_suggestions, name='search_suggestions'),
+    path('search/popular/', popular_searches, name='popular_searches'),
     
     # Include router URLs
     path('', include(router.urls)),

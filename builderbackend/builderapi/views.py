@@ -369,3 +369,181 @@ def dashboard_analytics(request):
     }
     
     return Response(analytics)
+
+# Search Views
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_content(request):
+    """Search across websites, products, and blog posts"""
+    query = request.GET.get('q', '').strip()
+    content_type = request.GET.get('type', '')
+    sort_by = request.GET.get('sortBy', 'relevance')
+    
+    if not query:
+        return Response({
+            'results': [],
+            'total': 0,
+            'query': query,
+            'suggestions': []
+        })
+    
+    results = []
+    
+    # Search websites
+    if not content_type or content_type == 'page':
+        websites = Website.objects.filter(
+            user=request.user,
+            name__icontains=query
+        ) | Website.objects.filter(
+            user=request.user,
+            description__icontains=query
+        )
+        
+        for website in websites:
+            results.append({
+                'id': f'website_{website.id}',
+                'type': 'page',
+                'title': website.name,
+                'snippet': website.description[:200] + '...' if len(website.description) > 200 else website.description,
+                'url': f'/{website.slug}',
+                'lastModified': website.updatedAt.isoformat(),
+                'relevance': calculate_relevance(query, website.name + ' ' + website.description)
+            })
+    
+    # Search products
+    if not content_type or content_type == 'product':
+        products = Product.objects.filter(
+            website__user=request.user,
+            name__icontains=query
+        ) | Product.objects.filter(
+            website__user=request.user,
+            description__icontains=query
+        )
+        
+        for product in products:
+            results.append({
+                'id': f'product_{product.id}',
+                'type': 'product',
+                'title': product.name,
+                'snippet': product.shortDescription or product.description[:200] + '...' if len(product.description) > 200 else product.description,
+                'url': f'/{product.website.slug}/products/{product.id}',
+                'lastModified': product.updatedAt.isoformat(),
+                'price': float(product.price),
+                'relevance': calculate_relevance(query, product.name + ' ' + product.description)
+            })
+    
+    # Search blog posts
+    if not content_type or content_type == 'blog':
+        blogs = BlogPost.objects.filter(
+            website__user=request.user,
+            title__icontains=query
+        ) | BlogPost.objects.filter(
+            website__user=request.user,
+            content__icontains=query
+        )
+        
+        for blog in blogs:
+            results.append({
+                'id': f'blog_{blog.id}',
+                'type': 'blog',
+                'title': blog.title,
+                'snippet': blog.excerpt or blog.content[:200] + '...' if len(blog.content) > 200 else blog.content,
+                'url': f'/{blog.website.slug}/blogs/{blog.slug}',
+                'lastModified': blog.updatedAt.isoformat(),
+                'relevance': calculate_relevance(query, blog.title + ' ' + blog.content)
+            })
+    
+    # Sort results
+    if sort_by == 'relevance':
+        results.sort(key=lambda x: x['relevance'], reverse=True)
+    elif sort_by == 'date':
+        results.sort(key=lambda x: x['lastModified'], reverse=True)
+    elif sort_by == 'title':
+        results.sort(key=lambda x: x['title'].lower())
+    
+    # Generate suggestions
+    suggestions = generate_search_suggestions(query, request.user)
+    
+    return Response({
+        'results': results,
+        'total': len(results),
+        'query': query,
+        'suggestions': suggestions
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_suggestions(request):
+    """Get search suggestions based on query"""
+    query = request.GET.get('q', '').strip()
+    
+    if not query:
+        return Response([])
+    
+    suggestions = generate_search_suggestions(query, request.user)
+    return Response(suggestions)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def popular_searches(request):
+    """Get popular search terms"""
+    # For now, return static popular searches
+    # In production, this would be based on actual search analytics
+    popular = [
+        {'query': 'products', 'count': 150},
+        {'query': 'blog posts', 'count': 89},
+        {'query': 'website', 'count': 76},
+        {'query': 'business', 'count': 65},
+        {'query': 'portfolio', 'count': 54}
+    ]
+    
+    return Response(popular)
+
+def calculate_relevance(query, content):
+    """Calculate relevance score for search results"""
+    if not query or not content:
+        return 0.0
+    
+    query_lower = query.lower()
+    content_lower = content.lower()
+    
+    # Exact match gets highest score
+    if query_lower == content_lower:
+        return 1.0
+    
+    # Title/name match gets high score
+    if query_lower in content_lower[:100]:
+        return 0.9
+    
+    # Count word matches
+    query_words = query_lower.split()
+    content_words = content_lower.split()
+    
+    matches = sum(1 for word in query_words if word in content_words)
+    if len(query_words) > 0:
+        return min(0.8, matches / len(query_words))
+    
+    return 0.1
+
+def generate_search_suggestions(query, user):
+    """Generate search suggestions based on user's content"""
+    suggestions = []
+    
+    # Get unique words from user's websites
+    websites = Website.objects.filter(user=user)
+    for website in websites:
+        words = (website.name + ' ' + website.description).lower().split()
+        for word in words:
+            if len(word) > 3 and query.lower() in word and word not in suggestions:
+                suggestions.append(word)
+    
+    # Get unique words from user's products
+    products = Product.objects.filter(website__user=user)
+    for product in products:
+        words = (product.name + ' ' + product.description).lower().split()
+        for word in words:
+            if len(word) > 3 and query.lower() in word and word not in suggestions:
+                suggestions.append(word)
+    
+    # Limit to 5 suggestions
+    return suggestions[:5]
