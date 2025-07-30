@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - Corporate Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f8fafc;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            padding: 40px 30px;
+            text-align: center;
+            color: white;
+        }
+        
+        .logo {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            font-size: 16px;
+            color: #4b5563;
+            margin-bottom: 30px;
+            line-height: 1.7;
+        }
+        
+        .otp-container {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .otp-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        
+        .otp-code {
+            font-size: 36px;
+            font-weight: 800;
+            color: #1f2937;
+            letter-spacing: 8px;
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        
+        .otp-note {
+            font-size: 14px;
+            color: #6b7280;
+            font-style: italic;
+        }
+        
+        .warning {
+            background-color: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .warning-icon {
+            color: #f59e0b;
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        
+        .warning-text {
+            font-size: 14px;
+            color: #92400e;
+            font-weight: 500;
+        }
+        
+        .instructions {
+            background-color: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .instructions h3 {
+            color: #0c4a6e;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .instructions ol {
+            color: #0369a1;
+            font-size: 14px;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .footer {
+            background-color: #f8fafc;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .footer-text {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 15px;
+        }
+        
+        .company-info {
+            font-size: 12px;
+            color: #9ca3af;
+            line-height: 1.5;
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #e5e7eb, transparent);
+            margin: 30px 0;
+        }
+        
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 0;
+                border-radius: 0;
+            }
+            
+            .header, .content, .footer {
+                padding: 30px 20px;
+            }
+            
+            .otp-code {
+                font-size: 28px;
+                letter-spacing: 4px;
+                padding: 15px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">CP</div>
+            <h1>Email Verification</h1>
+            <p>Secure your Corporate Portal account</p>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <div class="greeting">Hello {{ user_name }},</div>
+            
+            <div class="message">
+                Welcome to <strong>Corporate Portal</strong>! To complete your account registration and ensure the security of your account, please verify your email address using the verification code below.
+            </div>
+            
+            <!-- OTP Container -->
+            <div class="otp-container">
+                <div class="otp-label">Your Verification Code</div>
+                <div class="otp-code">{{ otp_code }}</div>
+                <div class="otp-note">This code expires in 10 minutes</div>
+            </div>
+            
+            <!-- Instructions -->
+            <div class="instructions">
+                <h3>📋 How to verify your account:</h3>
+                <ol>
+                    <li>Return to the Corporate Portal registration page</li>
+                    <li>Enter the 6-digit verification code above</li>
+                    <li>Click "Verify Email" to complete your registration</li>
+                    <li>Start building your professional websites!</li>
+                </ol>
+            </div>
+            
+            <!-- Warning -->
+            <div class="warning">
+                <span class="warning-icon">⚠️</span>
+                <span class="warning-text">
+                    <strong>Security Notice:</strong> This verification code is valid for 10 minutes only. If you didn't request this verification, please ignore this email or contact our support team.
+                </span>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="message">
+                If you're having trouble with verification, you can request a new code from the registration page or contact our support team for assistance.
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-text">
+                Thank you for choosing Corporate Portal for your website building needs!
+            </div>
+            <div class="company-info">
+                <strong>Corporate Portal</strong><br>
+                Professional Website Builder & E-commerce Platform<br>
+                This email was sent to {{ user_email }}<br>
+                <br>
+                © 2025 Corporate Portal. All rights reserved.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

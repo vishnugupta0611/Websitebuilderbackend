@@ -17,6 +17,7 @@ from .serializers import (
     UserSerializer, WebsiteSerializer, BlogPostSerializer, ProductSerializer,
     OrderSerializer, CartSerializer, CheckoutSerializer
 )
+from .email_utils import send_otp_email, send_welcome_email
 
 # Authentication Views
 @api_view(['POST'])
@@ -30,17 +31,13 @@ def register(request):
         otp = ''.join(random.choices(string.digits, k=6))
         OTPVerification.objects.create(user=user, otp=otp)
         
-        # Send OTP email (in console for development)
-        try:
-            send_mail(
-                'Verify Your Email - Corporate Portal',
-                f'Your OTP verification code is: {otp}',
-                settings.EMAIL_HOST_USER,
-                [user.email],
-                fail_silently=False,
-            )
-        except Exception as e:
-            print(f"Email sending failed: {e}")
+        # Send beautiful OTP email
+        email_sent = send_otp_email(user, otp)
+        
+        if not email_sent:
+            return Response({
+                'error': 'Failed to send verification email. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({
             'message': 'User registered successfully. Please check your email for OTP verification.',
@@ -48,6 +45,43 @@ def register(request):
         }, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def resend_otp(request):
+    """Resend OTP to user's email"""
+    email = request.data.get('email')
+    
+    if not email:
+        return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(email=email)
+        
+        if user.isVerified:
+            return Response({'error': 'User is already verified'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mark all existing OTPs as used
+        OTPVerification.objects.filter(user=user, is_used=False).update(is_used=True)
+        
+        # Generate new OTP
+        otp = ''.join(random.choices(string.digits, k=6))
+        OTPVerification.objects.create(user=user, otp=otp)
+        
+        # Send beautiful OTP email
+        email_sent = send_otp_email(user, otp)
+        
+        if not email_sent:
+            return Response({
+                'error': 'Failed to send verification email. Please try again.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'message': 'New verification code sent to your email'
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -60,28 +94,46 @@ def verify_otp(request):
         try:
             user = User.objects.get(email=email)
             
-            # BYPASS OTP VERIFICATION - Accept any 6-digit OTP for development
-            if len(otp) == 6 and otp.isdigit():
-                # Mark user as verified
-                user.isVerified = True
-                user.save()
-                
-                # Mark any existing OTP as used
-                OTPVerification.objects.filter(user=user, is_used=False).update(is_used=True)
-                
-                # Generate JWT tokens
-                refresh = RefreshToken.for_user(user)
-                
+            # Get the latest unused OTP for this user
+            otp_verification = OTPVerification.objects.filter(
+                user=user, 
+                otp=otp, 
+                is_used=False
+            ).first()
+            
+            if not otp_verification:
                 return Response({
-                    'message': 'Email verified successfully',
-                    'user': UserSerializer(user).data,
-                    'tokens': {
-                        'refresh': str(refresh),
-                        'access': str(refresh.access_token),
-                    }
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({'error': 'Please enter a valid 6-digit OTP'}, status=status.HTTP_400_BAD_REQUEST)
+                    'error': 'Invalid or expired OTP. Please request a new one.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if OTP is expired (10 minutes)
+            if otp_verification.is_expired():
+                return Response({
+                    'error': 'OTP has expired. Please request a new one.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Mark OTP as used
+            otp_verification.is_used = True
+            otp_verification.save()
+            
+            # Mark user as verified
+            user.isVerified = True
+            user.save()
+            
+            # Send welcome email
+            send_welcome_email(user)
+            
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'message': 'Email verified successfully! Welcome to Corporate Portal.',
+                'user': UserSerializer(user).data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }
+            }, status=status.HTTP_200_OK)
             
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)

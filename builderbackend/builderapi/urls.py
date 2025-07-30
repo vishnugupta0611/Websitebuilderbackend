@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
-    register, verify_otp, login, logout, profile, dashboard_analytics,
+    register, verify_otp, resend_otp, login, logout, profile, dashboard_analytics,
     WebsiteViewSet, BlogPostViewSet, ProductViewSet, OrderViewSet, CartViewSet
 )
 
@@ -17,6 +17,7 @@ urlpatterns = [
     # Authentication endpoints
     path('auth/register/', register, name='register'),
     path('auth/verify-otp/', verify_otp, name='verify_otp'),
+    path('auth/resend-otp/', resend_otp, name='resend_otp'),
     path('auth/login/', login, name='login'),
     path('auth/logout/', logout, name='logout'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
