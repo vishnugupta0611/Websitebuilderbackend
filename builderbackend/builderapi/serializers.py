@@ -63,10 +63,21 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'isVerified', 'createdAt', 'updatedAt']
 
 class WebsiteSerializer(serializers.ModelSerializer):
+    # Add computed fields for template object
+    template = serializers.SerializerMethodField()
+    
     class Meta:
         model = Website
         fields = '__all__'
         read_only_fields = ['user', 'createdAt', 'updatedAt']
+    
+    def get_template(self, obj):
+        """Return template as an object with id, name, and metadata"""
+        return {
+            'id': obj.template_id,
+            'name': obj.template_name,
+            'metadata': obj.template_metadata
+        }
     
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
